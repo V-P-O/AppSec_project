@@ -1,11 +1,15 @@
 CREATE TABLE users (
     id SERIAL PRIMARY KEY,
     username VARCHAR(100) UNIQUE NOT NULL,
+    email VARCHAR(100) UNIQUE NOT NULL,
     password_hash VARCHAR(200) NOT NULL,
-    created_at TIMESTAMP DEFAULT NOW()
+    created_at TIMESTAMP DEFAULT NOW(),
+    is_activated BOOLEAN DEFAULT FALSE,
+    activation_token VARCHAR(255),
+    activation_token_expiry TIMESTAMP
 );
 
-INSERT INTO users (username, password)
+INSERT INTO users (username, password);
 VALUES ('admin', '1234');
 
 
