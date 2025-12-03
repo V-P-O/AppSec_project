@@ -1,0 +1,31 @@
+@startuml
+actor User
+participant Browser
+participant "Flask App" as Flask
+database DB
+participant "Email Service" as Email
+
+User -> Browser : Enter data
+Browser -> Flask : POST /register
+Flask -> Flask : Validate input
+
+alt Invalid email
+    Flask -> Browser : Invalid email format
+end
+
+alt Weak password
+    Flask -> Browser : "Password must contain uppercase, digit, special character"
+end
+
+alt User exists
+    Flask -> DB : SELECT username/email
+    DB --> Flask : user exists
+    Flask -> Browser : Unable to create account
+end
+
+alt Success
+    Flask -> DB : INSERT new user
+    Flask -> Email : Send activation email
+    Flask --> Browser : Registration success
+end
+@enduml

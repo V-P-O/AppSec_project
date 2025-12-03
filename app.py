@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for
+from flask import Flask, render_template, request, redirect, url_for, session
 import psycopg2
 import bcrypt
 import re
@@ -6,6 +6,10 @@ import secrets
 from datetime import datetime, timedelta
 import smtplib
 from email.mime.text import MIMEText
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
 
 app = Flask(__name__)
 
@@ -13,6 +17,7 @@ password_pattern = r'^(?=.*[A-Z])(?=.*[0-9])(?=.*[!@#$%^&*(),.?":{}|<>]).{8,}$'
 username_pattern = r'^[A-Za-z0-9_]{3,}$'
 email_pattern = r'^[\w\.-]+@[\w\.-]+\.\w+$'
 
+app.secret_key = os.getenv("SECRET_KEY") 
 
 def get_db_connection():
     return psycopg2.connect(
@@ -31,7 +36,7 @@ def check_password(plain_password, stored_hash):
 
 @app.route("/")
 def index():
-    return "index"
+    return render_template("index.html")
 
 @app.route("/login", methods=["GET"])
 def login_get():
@@ -50,7 +55,7 @@ def login_post():
         cur = conn.cursor()
     
         cur.execute("""
-                SELECT password_hash, is_activated, email, activation_token 
+                SELECT password_hash, is_activated, email, activation_token, id, username 
                 FROM users 
                 WHERE username = %s OR email = %s
             """, (username, username))
@@ -67,6 +72,10 @@ def login_post():
                                 error="Please activate your account first.",
                                 resend_token=user[3],
                                 email=user[2])
+        
+        session["user_id"] = user[4]
+        session["username"] = user[5]
+        
         return "Login successful!"
     else:
         return render_template("login.html", error="Invalid username or password")
@@ -171,8 +180,8 @@ def resend_activation():
     return "A new activation email has been sent."
 
 def send_token(email):
-    send_email = "zvonimir.pipic@gmail.com"
-    send_password = "elatnkwaercegiov"
+    send_email = os.getenv("SMTP_EMAIL")
+    send_password = os.getenv("SMTP_PASSWORD")
     
     token = secrets.token_urlsafe(32)
     expiry = datetime.now() + timedelta(hours=24)

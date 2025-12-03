@@ -1,0 +1,35 @@
+@startuml
+actor User
+participant Browser
+participant "Flask App" as Flask
+database DB
+
+User -> Browser : Enter username/email + password
+Browser -> Flask : POST /login
+Flask -> Flask : Validate username/email format
+
+alt Invalid username/email format
+    Flask -> Browser : "Invalid username or password"
+end
+
+Flask -> DB : SELECT user by username/email
+DB --> Flask : user record (or none)
+
+alt User not found
+    Flask -> Browser : "Invalid username or password"
+end
+
+Flask -> Flask : Check password (bcrypt)
+
+alt Wrong password
+    Flask -> Browser : "Invalid username or password"
+end
+
+alt Account not activated
+    Flask -> Browser : "Please activate your account first.\n(resend available)"
+end
+
+alt Success
+    Flask --> Browser : Login successful
+end
+@enduml
