@@ -14,3 +14,8 @@ VALUES ('admin', '1234');
 
 
 pg_ctl -D /var/lib/postgres/.postgresql -l logfile start
+
+
+ALTER TABLE public.users 
+ADD COLUMN reset_token VARCHAR(255),
+ADD COLUMN reset_token_expiry TIMESTAMP;
