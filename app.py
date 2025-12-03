@@ -105,7 +105,8 @@ def register_post():
         cur.close()
         conn.close()
     else:
-        return render_template("register.html", error="Passwords must contain at least 1 upper case letter, 1 special character and be at least 8 characters long.\n"
+        return render_template("register.html", error="Passwords must contain at least 1 upper case letter,"
+                                                      "1 special character and be at least 8 characters long."
                                                       "Usernames can only contain letters, numbers and underscore.")
 
     if not user:
@@ -130,7 +131,8 @@ def register_post():
                 conn.close()
                 return "Register successful!"
             else:
-                return render_template("register.html", error="Passwords must contain at least 1 upper case letter, 1 special character and be at least 8 characters long.\n"
+                return render_template("register.html", error="Passwords must contain at least 1 upper case letter,"
+                                                              "1 special character and be at least 8 characters long."
                                                               "Usernames can only contain letters, numbers and underscore.")
         else:
             return render_template("register.html", error="Passwords are not matching.")
