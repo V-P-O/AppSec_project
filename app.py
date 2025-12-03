@@ -81,6 +81,7 @@ def login_post():
                                 resend_token=user[3],
                                 email=user[2])
         
+        session.clear()
         session["user_id"] = user[4]
         session["username"] = user[5]
         
