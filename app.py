@@ -18,6 +18,12 @@ username_pattern = r'^[A-Za-z0-9_]{3,}$'
 email_pattern = r'^[\w\.-]+@[\w\.-]+\.\w+$'
 
 app.secret_key = os.getenv("SECRET_KEY") 
+app.config["SESSION_COOKIE_HTTPONLY"] = True
+app.config["SESSION_COOKIE_SAMESITE"] = "Strict"
+app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=30)
+
+send_email = os.getenv("SMTP_EMAIL")
+send_password = os.getenv("SMTP_PASSWORD")
 
 def get_db_connection():
     return psycopg2.connect(
@@ -40,6 +46,8 @@ def index():
 
 @app.route("/login", methods=["GET"])
 def login_get():
+    if "user_id" in session:
+        return redirect(url_for("index"))
     return render_template("login.html")
 
 @app.route("/login", methods=["POST"])
@@ -76,12 +84,19 @@ def login_post():
         session["user_id"] = user[4]
         session["username"] = user[5]
         
-        return "Login successful!"
+        if request.form.get("remember_me"):
+            session.permanent = True 
+        else:
+            session.permanent = False
+        
+        return redirect(url_for("index"))
     else:
         return render_template("login.html", error="Invalid username or password")
 
 @app.route("/register", methods=["GET"])
 def register_get():
+    if "user_id" in session:
+        return redirect(url_for("index"))
     return render_template("register.html")
 
 @app.route("/register", methods=["POST"])
@@ -182,13 +197,12 @@ def resend_activation():
     return "A new activation email has been sent."
 
 def send_token(email):
-    send_email = os.getenv("SMTP_EMAIL")
-    send_password = os.getenv("SMTP_PASSWORD")
-    
     token = secrets.token_urlsafe(32)
     expiry = datetime.now() + timedelta(hours=24)
     
-    msg = MIMEText(f"Click to activate your account:\n\nhttp://127.0.0.1:8080/activate?token={token}")
+    activate_link = url_for("activate", token=token, _external=True)
+    
+    msg = MIMEText(f"Click to activate your account:\n\n{activate_link}")
     msg["Subject"] = "Account Activation"
     msg["From"] = send_email
     msg["To"] = email
@@ -198,5 +212,103 @@ def send_token(email):
         smtp.send_message(msg)
     
     return token, expiry
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect(url_for("index"))
+
+def send_reset_email(email, token):
+    reset_link = url_for("reset_password", token=token, _external=True)
+    body = f"Click this link to reset your password:\n{reset_link}"
+
+    msg = MIMEText(body)
+    msg["Subject"] = "Password Reset"
+    msg["From"] = send_email
+    msg["To"] = email
+
+    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
+        smtp.login(send_email, send_password)
+        smtp.send_message(msg)
+
+
+@app.route("/forgot-password", methods=["GET", "POST"])
+def forgot_password():
+    if request.method == "POST":
+        email = request.form["email"]
+
+        conn = get_db_connection()
+        cur = conn.cursor()
+
+        cur.execute("SELECT id FROM users WHERE email=%s", (email,))
+        user = cur.fetchone()
+
+        if user:
+            token = secrets.token_urlsafe(32)
+
+            cur.execute("""
+                UPDATE users 
+                SET reset_token=%s, reset_token_expiry=NOW() + INTERVAL '1 hour'
+                WHERE email=%s
+            """, (token, email))
+            conn.commit()
+
+            send_reset_email(email, token)
+
+        cur.close()
+        conn.close()
+
+        return render_template("forgot_password.html", message="If the email exists, a reset link was sent.")
+
+    return render_template("forgot_password.html")
+
+
+@app.route("/reset-password/<token>", methods=["GET", "POST"])
+def reset_password(token):
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT id 
+        FROM users 
+        WHERE reset_token=%s AND reset_token_expiry > NOW()
+    """, (token,))
+    user = cur.fetchone()
+
+    if not user:
+        return "Invalid or expired token"
+
+    if request.method == "POST":
+        new_pass = request.form["password"]
+        confirm = request.form["confirm_password"]
+        
+        if new_pass != confirm:
+            return render_template("reset_password.html",
+                                token=token,
+                                error="Passwords do not match.")
+        
+        if not re.match(password_pattern, new_pass):
+            return render_template("reset_password.html", 
+                                   token = token,
+                                   error="Passwords must contain at least 1 upper case letter,"
+                                        "1 special character and be at least 8 characters long.")
+        
+        hashed = hash_password(new_pass)
+
+        cur.execute("""
+            UPDATE users
+            SET password_hash=%s, reset_token=NULL, reset_token_expiry=NULL
+            WHERE id=%s
+        """, (hashed, user[0]))
+        conn.commit()
+        cur.close()
+        conn.close()
+
+        return redirect(url_for("login_get"))
+
+    cur.close()
+    conn.close()
+    return render_template("reset_password.html", token=token)
+
 
 app.run(host = "127.0.0.1", port = 8080)
