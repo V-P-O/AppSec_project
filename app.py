@@ -82,6 +82,7 @@ def login_post():
                                 email=user[2])
         
         session.clear()
+        session.modified = True
         session["user_id"] = user[4]
         session["username"] = user[5]
         
@@ -145,7 +146,7 @@ def register_post():
                 conn.commit()
                 cur.close()
                 conn.close()
-                return "Register successful!"
+                return "Registration successful! Please activate your account."
             else:
                 return render_template("register.html", error="Passwords must contain at least 1 upper case letter,"
                                                               "1 special character and be at least 8 characters long."
@@ -217,6 +218,7 @@ def send_token(email):
 @app.route("/logout")
 def logout():
     session.clear()
+    session.modified = True
     return redirect(url_for("index"))
 
 def send_reset_email(email, token):
