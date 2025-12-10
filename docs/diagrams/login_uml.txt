@@ -1,35 +1,41 @@
 @startuml
 actor User
 participant Browser
-participant "Flask App" as Flask
+participant "Flask App" as App
 database DB
 
-User -> Browser : Enter username/email + password
-Browser -> Flask : POST /login
-Flask -> Flask : Validate username/email format
+User -> Browser: Submit login form\n(username, password, remember_me)
+Browser -> App: POST /login
 
-alt Invalid username/email format
-    Flask -> Browser : "Invalid username or password"
+App -> App: Validate username\n(pattern or email_pattern)
+
+alt Invalid username format
+    App -> Browser: "Invalid username or password"
 end
 
-Flask -> DB : SELECT user by username/email
-DB --> Flask : user record (or none)
+App -> DB: request user information
+DB --> App: user record or None
 
 alt User not found
-    Flask -> Browser : "Invalid username or password"
+    App -> Browser : "Invalid username or password"
 end
 
-Flask -> Flask : Check password (bcrypt)
-
-alt Wrong password
-    Flask -> Browser : "Invalid username or password"
-end
+App -> App : Check password (bcrypt)
 
 alt Account not activated
-    Flask -> Browser : "Please activate your account first.\n(resend available)"
+    App -> Browser: "Please activate your account first."
 end
 
-alt Success
-    Flask --> Browser : Login successful
+App -> App: session.clear()
+App -> App: store user_id, username
+
+alt remember_me checked
+    App -> App: session.permanent = True
+else
+    App -> App: session.permanent = False
 end
+
+App -> Browser: Login successful
+
+
 @enduml
