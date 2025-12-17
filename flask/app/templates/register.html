@@ -1,0 +1,74 @@
+{% extends "layout.html" %}
+
+{% block title %}Register{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-6 col-lg-5">
+
+    <div class="card shadow-sm">
+      <div class="card-body">
+
+        <h4 class="card-title text-center mb-4">
+          Create an account
+        </h4>
+
+        <form method="post">
+
+          <div class="mb-3">
+            <label class="form-label">Username</label>
+            <input
+              type="text"
+              name="username"
+              class="form-control"
+              required
+            >
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">Email</label>
+            <input
+              type="email"
+              name="email"
+              class="form-control"
+              required
+            >
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">Password</label>
+            <input
+              type="password"
+              name="password"
+              class="form-control"
+              required
+            >
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">Repeat password</label>
+            <input
+              type="password"
+              name="password_r"
+              class="form-control"
+              required
+            >
+          </div>
+
+          <button type="submit" class="btn btn-primary w-100">
+            Register
+          </button>
+        </form>
+
+        {% if error %}
+          <div class="alert alert-danger mt-3 mb-0">
+            {{ error }}
+          </div>
+        {% endif %}
+
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}

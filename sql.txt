@@ -6,7 +6,11 @@ CREATE TABLE users (
     created_at TIMESTAMP DEFAULT NOW(),
     is_activated BOOLEAN DEFAULT FALSE,
     activation_token VARCHAR(255),
-    activation_token_expiry TIMESTAMP
+    activation_token_expiry TIMESTAMP,
+    reset_token VARCHAR(255),
+    reset_token_expiry TIMESTAMP,
+    is_admin BOOLEAN DEFAULT FALSE,
+    is_blocked BOOLEAN DEFAULT FALSE
 );
 
 INSERT INTO users (username, password);
@@ -14,8 +18,3 @@ VALUES ('admin', '1234');
 
 
 pg_ctl -D /var/lib/postgres/.postgresql -l logfile start
-
-
-ALTER TABLE public.users 
-ADD COLUMN reset_token VARCHAR(255),
-ADD COLUMN reset_token_expiry TIMESTAMP;

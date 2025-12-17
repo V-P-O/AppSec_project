@@ -1,0 +1,85 @@
+{% extends "layout.html" %}
+
+{% block title %}Admin Dashboard{% endblock %}
+
+{% block content %}
+<h3 class="mb-4">Admin – User Management</h3>
+
+<table id="usersTable" class="table table-striped align-middle">
+  <thead>
+    <tr>
+      <th>ID</th>
+      <th>Username</th>
+      <th>Email</th>
+      <th>Role</th>
+      <th>Status</th>
+      <th class="text-end">Action</th>
+    </tr>
+  </thead>
+  <tbody>
+
+    {% for u in users %}
+    <tr>
+      <td>{{ u[0] }}</td>
+      <td>{{ u[1] }}</td>
+      <td>{{ u[2] }}</td>
+      <td>
+        <span class="badge bg-secondary">{{ u[3] }}</span>
+      </td>
+      <td>
+        {% if u[5] %}
+            <span class="badge bg-danger">Blocked</span>
+        {% elif u[4] %}
+            <span class="badge bg-success">Activated</span>
+        {% else %}
+            <span class="badge bg-warning text-dark">Not activated</span>
+        {% endif %}
+      </td>
+      <td class="text-end">
+        <form method="post"
+                action="{{ url_for('admin.toggle_user_status', user_id=u[0]) }}">
+
+            <button
+                class="btn btn-sm
+                    {% if u[5] %}
+                    btn-success
+                    {% elif u[4] %}
+                    btn-danger
+                    {% else %}
+                    btn-warning
+                    {% endif %}"
+                {% if u[0] == session.get("user_id") %}disabled{% endif %}>
+
+                {% if u[5] %}
+                    Unblock
+                {% elif u[4] %}
+                    Block
+                {% else %}
+                    Activate
+                {% endif %}
+
+            </button>
+        </form>
+      </td>
+
+    </tr>
+    {% endfor %}
+
+  </tbody>
+</table>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  $(function () {
+    $('#usersTable').DataTable({
+      pageLength: 10,
+      lengthChange: false,
+      ordering: true,
+      columnDefs: [
+        { orderable: false, targets: -1 }
+      ]
+    });
+  });
+</script>
+{% endblock %}

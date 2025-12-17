@@ -1,0 +1,82 @@
+{% extends "layout.html" %}
+
+{% block title %}Login{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-5 col-lg-4">
+
+    <div class="card shadow-sm">
+      <div class="card-body">
+
+        <h4 class="card-title text-center mb-4">
+          Login
+        </h4>
+
+        <form method="post">
+
+          <div class="mb-3">
+            <label class="form-label">Username or email</label>
+            <input
+              type="text"
+              name="username"
+              class="form-control"
+              required
+            >
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">Password</label>
+            <input
+              type="password"
+              name="password"
+              class="form-control"
+              required
+            >
+          </div>
+
+          <div class="form-check mb-3">
+            <input
+              class="form-check-input"
+              type="checkbox"
+              name="remember_me"
+              id="rememberMe"
+            >
+            <label class="form-check-label" for="rememberMe">
+              Remember me
+            </label>
+          </div>
+
+          <button type="submit" class="btn btn-primary w-100">
+            Login
+          </button>
+        </form>
+
+        <div class="text-center mt-3">
+          <a href="{{ url_for('auth.forgot_password') }}">
+            Forgot your password?
+          </a>
+        </div>
+
+        {% if error %}
+          <div class="alert alert-danger mt-3 mb-0">
+            {{ error }}
+
+            {% if email %}
+              <div class="mt-2">
+                <a
+                  href="{{ url_for('auth.resend_activation', email=email) }}"
+                  class="alert-link">
+                  Resend activation email
+                </a>
+              </div>
+            {% endif %}
+          </div>
+        {% endif %}
+
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}

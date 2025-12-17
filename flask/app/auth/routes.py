@@ -1,57 +1,19 @@
-from flask import Flask, render_template, request, redirect, url_for, session
-import psycopg2
-import bcrypt
-import re
+from flask import Blueprint
+from flask import render_template, request, redirect, url_for, session
+from app.db import get_db_connection
+from app.security import hash_password, check_password, is_valid_email, is_valid_password, is_valid_username
 import secrets
-from datetime import datetime, timedelta
-import smtplib
-from email.mime.text import MIMEText
-from dotenv import load_dotenv
-import os
-from functools import wraps
+from app.email import send_reset_email, send_token
 
-load_dotenv()
+auth_bp = Blueprint("auth", __name__)
 
-app = Flask(__name__)
-
-password_pattern = r'^(?=.*[A-Z])(?=.*[0-9])(?=.*[!@#$%^&*(),.?":{}|<>]).{8,}$'
-username_pattern = r'^[A-Za-z0-9_]{3,}$'
-email_pattern = r'^[\w\.-]+@[\w\.-]+\.\w+$'
-
-app.secret_key = os.getenv("SECRET_KEY") 
-app.config["SESSION_COOKIE_HTTPONLY"] = True
-app.config["SESSION_COOKIE_SAMESITE"] = "Strict"
-app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=30)
-
-send_email = os.getenv("SMTP_EMAIL")
-send_password = os.getenv("SMTP_PASSWORD")
-
-def get_db_connection():
-    return psycopg2.connect(
-        host="127.0.0.1",
-        database="app_sec",
-        user="postgres",
-        password="postgres"
-    )
-
-def hash_password(plain_password):
-    hashed = bcrypt.hashpw(plain_password.encode('utf-8'), bcrypt.gensalt())
-    return hashed.decode('utf-8')
-
-def check_password(plain_password, stored_hash):
-    return bcrypt.checkpw(plain_password.encode('utf-8'), stored_hash.encode('utf-8'))
-
-@app.route("/")
-def index():
-    return render_template("index.html")
-
-@app.route("/login", methods=["GET"])
+@auth_bp.route("/login", methods=["GET"])
 def login_get():
     if "user_id" in session:
-        return redirect(url_for("index"))
+        return redirect(url_for("main.index"))
     return render_template("login.html")
 
-@app.route("/login", methods=["POST"])
+@auth_bp.route("/login", methods=["POST"])
 def login_post():
     username = request.form["username"]
     password = request.form["password"]
@@ -59,12 +21,12 @@ def login_post():
     password_pattern = r'^(?=.*[A-Z])(?=.*[0-9])(?=.*[!@#$%^&*(),.?":{}|<>]).{8,}$'
     username_pattern = r'^[A-Za-z0-9_]{3,}$'
 
-    if re.match(username_pattern, username) or re.match(email_pattern, username):
+    if is_valid_email(username) or is_valid_username(username):
         conn = get_db_connection()
         cur = conn.cursor()
     
         cur.execute("""
-                SELECT password_hash, is_activated, email, activation_token, id, username 
+                SELECT password_hash, is_activated, email, activation_token, id, username, role
                 FROM users 
                 WHERE username = %s OR email = %s
             """, (username, username))
@@ -86,33 +48,34 @@ def login_post():
         session.modified = True
         session["user_id"] = user[4]
         session["username"] = user[5]
+        session["role"] = user[6]
         
         if request.form.get("remember_me"):
             session.permanent = True 
         else:
             session.permanent = False
         
-        return redirect(url_for("index"))
+        return redirect(url_for("main.index"))
     else:
         return render_template("login.html", error="Invalid username or password")
 
-@app.route("/register", methods=["GET"])
+@auth_bp.route("/register", methods=["GET"])
 def register_get():
     if "user_id" in session:
-        return redirect(url_for("index"))
+        return redirect(url_for("main.index"))
     return render_template("register.html")
 
-@app.route("/register", methods=["POST"])
+@auth_bp.route("/register", methods=["POST"])
 def register_post():
     username = request.form["username"]
     email = request.form["email"]
     password = request.form["password"]
     password_r = request.form["password_r"]
 
-    if not re.match(email_pattern, email):
+    if not is_valid_email(email):
         return render_template("register.html", error="Invalid email format.")
     
-    if re.match(username_pattern, username):
+    if is_valid_username(username):
         
         conn = get_db_connection()
         cur = conn.cursor()
@@ -130,7 +93,7 @@ def register_post():
     if not user:
         if password == password_r:
             
-            if re.match(password_pattern, password):
+            if is_valid_password(password):
                 
                 hashed = hash_password(password)
     
@@ -157,7 +120,7 @@ def register_post():
     else:
         return render_template("register.html", error="Unable to create account. Try again with different data.")
 
-@app.route("/activate")
+@auth_bp.route("/activate")
 def activate():
     token = request.args.get("token")
 
@@ -179,7 +142,7 @@ def activate():
 
     return "Activation successful!" if result else "Invalid or expired token."
 
-@app.route("/resend_activation")
+@auth_bp.route("/resend_activation")
 def resend_activation():
     email = request.args.get("email")
     
@@ -199,44 +162,13 @@ def resend_activation():
     
     return "A new activation email has been sent."
 
-def send_token(email):
-    token = secrets.token_urlsafe(32)
-    expiry = datetime.now() + timedelta(hours=24)
-    
-    activate_link = url_for("activate", token=token, _external=True)
-    
-    msg = MIMEText(f"Click to activate your account:\n\n{activate_link}")
-    msg["Subject"] = "Account Activation"
-    msg["From"] = send_email
-    msg["To"] = email
-    
-    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
-        smtp.login(send_email, send_password)
-        smtp.send_message(msg)
-    
-    return token, expiry
-
-@app.route("/logout")
+@auth_bp.route("/logout")
 def logout():
     session.clear()
     session.modified = True
-    return redirect(url_for("index"))
+    return redirect(url_for("main.index"))
 
-def send_reset_email(email, token):
-    reset_link = url_for("reset_password", token=token, _external=True)
-    body = f"Click this link to reset your password:\n{reset_link}"
-
-    msg = MIMEText(body)
-    msg["Subject"] = "Password Reset"
-    msg["From"] = send_email
-    msg["To"] = email
-
-    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
-        smtp.login(send_email, send_password)
-        smtp.send_message(msg)
-
-
-@app.route("/forgot-password", methods=["GET", "POST"])
+@auth_bp.route("/forgot-password", methods=["GET", "POST"])
 def forgot_password():
     if request.method == "POST":
         email = request.form["email"]
@@ -267,7 +199,7 @@ def forgot_password():
     return render_template("forgot_password.html")
 
 
-@app.route("/reset-password/<token>", methods=["GET", "POST"])
+@auth_bp.route("/reset-password/<token>", methods=["GET", "POST"])
 def reset_password(token):
     conn = get_db_connection()
     cur = conn.cursor()
@@ -291,7 +223,7 @@ def reset_password(token):
                                 token=token,
                                 error="Passwords do not match.")
         
-        if not re.match(password_pattern, new_pass):
+        if not is_valid_password(new_pass):
             return render_template("reset_password.html", 
                                    token = token,
                                    error="Passwords must contain at least 1 upper case letter,"
@@ -308,11 +240,9 @@ def reset_password(token):
         cur.close()
         conn.close()
 
-        return redirect(url_for("login_get"))
+        return redirect(url_for("auth.login_get"))
 
     cur.close()
     conn.close()
     return render_template("reset_password.html", token=token)
 
-
-app.run(host = "127.0.0.1", port = 8080)
