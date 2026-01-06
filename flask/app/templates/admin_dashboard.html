@@ -13,6 +13,7 @@
       <th>Email</th>
       <th>Role</th>
       <th>Status</th>
+      <th>Permissions</th>
       <th class="text-end">Action</th>
     </tr>
   </thead>
@@ -24,7 +25,16 @@
       <td>{{ u[1] }}</td>
       <td>{{ u[2] }}</td>
       <td>
-        <span class="badge bg-secondary">{{ u[3] }}</span>
+        {% if u[3] != "admin" %}
+          <select class="form-select form-select-sm role-select"
+                  data-user-id="{{ u[0] }}"
+                  {% if u[0] == session.get("user_id") %}disabled{% endif %}>
+            <option value="user" {% if u[3] == 'user' %}selected{% endif %}>user</option>
+            <option value="moderator" {% if u[3] == 'moderator' %}selected{% endif %}>moderator</option>
+          </select>
+        {% else %}
+          <span>admin</span>
+        {% endif %}
       </td>
       <td>
         {% if u[5] %}
@@ -35,6 +45,30 @@
             <span class="badge bg-warning text-dark">Not activated</span>
         {% endif %}
       </td>
+      <td>
+        {% if u[6] %}
+          {% for p in u[6].split(',') %}
+            <span class="badge bg-info text-dark me-1 perm-badge">{{ p }}</span>
+          {% endfor %}
+        {% elif u[3] == "admin" %}
+          <span class="text-muted">Admin</span>
+        {% elif u[3] == "moderator" %}
+          <span class="text-muted">-</span>
+        {% else %}
+          <span class="text-muted">Regular user</span>
+        {% endif %}
+
+        {% if u[3] == "moderator" %}
+          <button type="button"
+                  class="btn btn-sm btn-outline-secondary ms-2 edit-perms"
+                  data-user-id="{{ u[0] }}"
+                  data-username="{{ u[1] }}"
+                  {% if u[0] == session.get("user_id") %}disabled{% endif %}>
+            Edit
+          </button>
+        {% endif %}
+      </td>
+
       <td class="text-end">
         <form method="post"
                 action="{{ url_for('admin.toggle_user_status', user_id=u[0]) }}">
@@ -67,12 +101,48 @@
 
   </tbody>
 </table>
+
+<div class="modal fade" id="permsModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+
+      <div class="modal-header">
+        <h5 class="modal-title">
+          Edit permissions: <span id="permsUserLabel"></span>
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+
+      <div class="modal-body">
+        <input type="hidden" id="permsUserId">
+        <div id="permsLoadError" class="alert alert-danger d-none mb-3"></div>
+
+        <div id="permsList" class="row g-2">
+          <!-- checkboxes injected here -->
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+          Close
+        </button>
+        <button type="button" class="btn btn-primary" id="savePermsBtn">
+          Save
+        </button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+
 {% endblock %}
+
 
 {% block scripts %}
 <script>
   $(function () {
-    $('#usersTable').DataTable({
+    const table = $('#usersTable').DataTable({
       pageLength: 10,
       lengthChange: false,
       ordering: true,
@@ -80,6 +150,101 @@
         { orderable: false, targets: -1 }
       ]
     });
+
+    const modalEl = document.getElementById('permsModal');
+    const permsModal = new bootstrap.Modal(modalEl);
+
+    function showLoadError(msg) {
+      $('#permsLoadError').removeClass('d-none').text(msg);
+    }
+    function clearLoadError() {
+      $('#permsLoadError').addClass('d-none').text('');
+    }
+
+    $(document).on('click', '.edit-perms', function () {
+      clearLoadError();
+
+      const userId = $(this).data('user-id');
+      const username = $(this).data('username');
+
+      $('#permsUserId').val(userId);
+      $('#permsUserLabel').text(username);
+      $('#permsList').html('<div class="text-muted">Loading…</div>');
+
+      $.getJSON(`/admin/users/${userId}/permissions`)
+        .done(function (data) {
+          const assigned = new Set(data.assigned || []);
+
+          const html = (data.all || []).map(p => `
+            <div class="col-md-6">
+              <div class="form-check">
+                <input class="form-check-input perm-check"
+                       type="checkbox"
+                       value="${p.key}"
+                       id="perm_${p.key}"
+                       ${assigned.has(p.key) ? 'checked' : ''}>
+                <label class="form-check-label" for="perm_${p.key}">
+                  <strong>${p.key}</strong><br>
+                  <small class="text-muted">${p.description || ''}</small>
+                </label>
+              </div>
+            </div>
+          `).join('');
+
+          $('#permsList').html(html || '<div class="text-muted">No permissions defined.</div>');
+          permsModal.show();
+        })
+        .fail(function () {
+          $('#permsList').html('');
+          showLoadError('Failed to load permissions.');
+          permsModal.show();
+        });
+    });
+
+    $('#savePermsBtn').on('click', function () {
+      clearLoadError();
+
+      const userId = $('#permsUserId').val();
+      const perms = $('.perm-check:checked').map(function () { return this.value; }).get();
+
+      $.ajax({
+        url: `/admin/users/${userId}/permissions`,
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({ permissions: perms })
+      })
+      .done(function () {
+        permsModal.hide();
+        location.reload();
+      })
+      .fail(function (xhr) {
+        const msg = xhr && xhr.responseJSON && xhr.responseJSON.error
+          ? xhr.responseJSON.error
+          : 'Failed to save permissions.';
+        showLoadError(msg);
+      });
+    });
+  });
+
+    $(document).on('change', '.role-select', function () {
+    const sel = $(this);
+    const userId = sel.data('user-id');
+    const newRole = sel.val();
+
+    $.ajax({
+      url: `/admin/users/${userId}/role`,
+      method: 'POST',
+      contentType: 'application/json',
+      data: JSON.stringify({ role: newRole })
+    })
+    .done(function () {
+      location.reload();
+    })
+    .fail(function () {
+      alert('Failed to update role');
+      location.reload();
+    });
   });
 </script>
+
 {% endblock %}

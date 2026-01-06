@@ -14,3 +14,11 @@ class Config:
 
     SMTP_EMAIL = os.getenv("SMTP_EMAIL")
     SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")
+
+    UPLOAD_FOLDER = "flask/uploads" 
+    MAX_CONTENT_LENGTH = 25 * 1024 * 1024   #25 MB
+
+    ALLOWED_IMAGE_EXT = {"png", "jpg", "jpeg", "webp"}  
+    ALLOWED_GIF_EXT = {"gif"}                           
+    ALLOWED_VIDEO_EXT = {"mp4", "webm"}  
+

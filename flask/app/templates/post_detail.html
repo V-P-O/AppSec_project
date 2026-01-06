@@ -1,0 +1,205 @@
+{% extends "layout.html" %}
+{% block title %}{{ post[1] }}{% endblock %}
+
+{% block content %}
+{# post indices: 0=id,1=title,2=created_at,3=username,4=user_id,5=media_type,6=file_path #}
+
+{% set can_delete =
+  session.get("user_id") and (
+    session.get("user_id") == post[4]
+    or session.get("role") == "admin"
+    or ("*" in user_permissions)
+    or ("delete_posts" in user_permissions)
+  )
+%}
+
+{% if post[7] %}
+  <div class="alert alert-warning d-flex align-items-center gap-2">
+    <i class="bi bi-exclamation-triangle"></i>
+    <div>
+      <strong>This post was deleted</strong>
+      {% if post[9] %} by <strong>{{ post[9] }}</strong>{% endif %}.
+    </div>
+      {% if can_delete %}
+        <form method="post"
+                action="{{ url_for('posts.recover_post', post_id=post[0]) }}"
+                class="mb-3"
+                onsubmit="return confirm('Recover this post?');">
+            <button type="submit" class="btn btn-outline-danger btn-sm">
+            <i class="bi bi-checkmark"></i> Recover
+            </button>
+        </form>
+    {% endif %}
+  </div>
+{% endif %}
+
+
+<div class="mb-3">
+  <h3 class="mb-1">{{ post[1] }}</h3>
+  {% if can_delete and not post[7] %}
+    <form method="post"
+            action="{{ url_for('posts.delete_post', post_id=post[0]) }}"
+            class="mb-3"
+            onsubmit="return confirm('Delete this post?');">
+        <button type="submit" class="btn btn-outline-danger btn-sm">
+        <i class="bi bi-trash"></i> Delete
+        </button>
+    </form>
+  {% endif %}
+  <div class="d-flex align-items-center gap-2 mb-3">
+    <button id="btnLike"
+            type="button"
+            class="btn btn-sm d-flex align-items-center gap-1
+            {% if user_vote == 1 %}btn-success{% else %}btn-outline-success{% endif %}">
+        <i class="bi {% if user_vote == 1 %}bi-hand-thumbs-up-fill{% else %}bi-hand-thumbs-up{% endif %}"></i>
+        <span id="likesCount">{{ likes }}</span>
+    </button>
+
+    <button id="btnDislike"
+            type="button"
+            class="btn btn-sm d-flex align-items-center gap-1
+            {% if user_vote == -1 %}btn-danger{% else %}btn-outline-danger{% endif %}">
+        <i class="bi {% if user_vote == -1 %}bi-hand-thumbs-down-fill{% else %}bi-hand-thumbs-down{% endif %}"></i>
+        <span id="dislikesCount">{{ dislikes }}</span>
+    </button>
+
+
+    <span class="text-muted ms-2">Score: <strong id="scoreCount">{{ score }}</strong></span>
+    </div>
+  <div class="text-muted">by {{ post[3] }}</div>
+</div>
+
+{% if post[6] %}
+  <div class="card mb-4">
+    {% if post[5] == 'video' %}
+      <video class="w-100" controls preload="metadata">
+        <source src="{{ url_for('posts.media', filename=post[6]) }}">
+      </video>
+    {% else %}
+      <img class="w-100" src="{{ url_for('posts.media', filename=post[6]) }}" alt="post media">
+    {% endif %}
+  </div>
+{% endif %}
+
+<hr class="my-4">
+
+<h5 class="mb-3">Comments</h5>
+
+{% if session.get("user_id") %}
+  <form method="post" action="{{ url_for('posts.add_comment', post_id=post[0]) }}" class="card card-body mb-3">
+    <input type="hidden" name="parent_comment_id" id="parentCommentId">
+    <div class="mb-2">
+      <textarea class="form-control" name="body" rows="3" placeholder="Write a comment..." required></textarea>
+    </div>
+    <div class="d-flex justify-content-between align-items-center">
+      <small id="replyHint" class="text-muted"></small>
+      <button class="btn btn-primary btn-sm">Comment</button>
+      <small class="text-muted">
+        <span id="replyHint"></span>
+        <a href="#" id="cancelReply" class="ms-2 d-none">cancel</a>
+    </small>
+    </div>
+  </form>
+{% else %}
+  <div class="alert alert-light border">
+    <a href="{{ url_for('auth.login_get') }}">Login</a> to comment.
+  </div>
+{% endif %}
+
+{% set top = comments | selectattr("1", "equalto", None) | list %}
+{% for c in top %}
+  <div class="card card-body mb-2">
+    <div class="d-flex justify-content-between">
+      <strong>{{ c[4] }}</strong>
+      <small class="text-muted">{{ c[3] }}</small>
+    </div>
+    <div class="mt-2">{{ c[2] }}</div>
+
+    {% if session.get("user_id") %}
+      <button class="btn btn-link btn-sm p-0 mt-2 replyBtn" data-id="{{ c[0] }}" data-user="{{ c[4] }}">Reply</button>
+    {% endif %}
+
+    {# replies #}
+    {% for r in comments if r[1] == c[0] %}
+      <div class="card card-body mt-2 ms-4">
+        <div class="d-flex justify-content-between">
+          <strong>{{ r[4] }}</strong>
+          <small class="text-muted">{{ r[3] }}</small>
+        </div>
+        <div class="mt-2">{{ r[2] }}</div>
+      </div>
+    {% endfor %}
+  </div>
+{% endfor %}
+
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+  function sendVote(val) {
+    return $.ajax({
+      url: "{{ url_for('posts.vote_post', post_id=post[0]) }}",
+      method: "POST",
+      contentType: "application/json",
+      data: JSON.stringify({ value: val })
+    });
+  }
+
+  $("#btnLike").on("click", function () {
+    sendVote(1).done(function (r) {
+      $("#likesCount").text(r.likes);
+      $("#dislikesCount").text(r.dislikes);
+      $("#scoreCount").text(r.score);
+      location.reload(); // simplest to update button state
+    });
+  });
+
+  $("#btnDislike").on("click", function () {
+    sendVote(-1).done(function (r) {
+      $("#likesCount").text(r.likes);
+      $("#dislikesCount").text(r.dislikes);
+      $("#scoreCount").text(r.score);
+      location.reload();
+    });
+  });
+</script>
+
+<script>
+  $(document).on("click", ".replyBtn", function (e) {
+    e.preventDefault();
+
+    const id = $(this).data("id");
+    const user = $(this).data("user");
+
+    $("#parentCommentId").val(id);
+    $("#replyHint").text("Replying to " + user + " (comment #" + id + ")");
+
+    document.querySelector("#parentCommentId")
+      .closest("form")
+      .scrollIntoView({ behavior: "smooth", block: "center" });
+  });
+
+  $("#cancelReply").on("click", function (e) {
+    e.preventDefault();
+    $("#parentCommentId").val("");
+    $("#replyHint").text("");
+    $("#cancelReply").addClass("d-none");
+  });
+
+  $(document).on("click", ".replyBtn", function (e) {
+    e.preventDefault();
+    const id = $(this).data("id");
+    const user = $(this).data("user");
+
+    $("#parentCommentId").val(id);
+    $("#replyHint").text("Replying to " + user);
+    $("#cancelReply").removeClass("d-none");
+
+    document.querySelector("#parentCommentId")
+      .closest("form")
+      .scrollIntoView({ behavior: "smooth", block: "center" });
+  });
+</script>
+
+{% endblock %}

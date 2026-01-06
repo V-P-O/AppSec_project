@@ -1,0 +1,33 @@
+{% extends "layout.html" %}
+{% block title %}New Post{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-6">
+
+    <h3 class="mb-3">Create post</h3>
+
+    {% if error %}
+      <div class="alert alert-danger">{{ error }}</div>
+    {% endif %}
+
+    <form method="post" enctype="multipart/form-data" class="card card-body">
+      <div class="mb-3">
+        <label class="form-label">Title</label>
+        <input class="form-control" name="title" maxlength="200" required>
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label">Media (image / gif / video)</label>
+        <input class="form-control" type="file" name="media">
+        <div class="form-text">
+          Allowed formats depend on server config.
+        </div>
+      </div>
+
+      <button class="btn btn-primary">Post</button>
+    </form>
+
+  </div>
+</div>
+{% endblock %}

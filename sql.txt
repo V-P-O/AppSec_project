@@ -13,6 +13,70 @@ CREATE TABLE users (
     is_blocked BOOLEAN DEFAULT FALSE
 );
 
+CREATE TABLE permissions (
+  key VARCHAR(50) PRIMARY KEY,
+  description TEXT
+);
+
+INSERT INTO permissions(key, description) VALUES
+('delete_any_post', 'Delete any user post'),
+('delete_any_comment', 'Delete any comment'),
+('ban_user', 'Block/unblock users'),
+('edit_user_roles', 'Change user role/permissions');
+
+
+CREATE TABLE user_permissions (
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  permission_key VARCHAR(50) NOT NULL REFERENCES permissions(key) ON DELETE CASCADE,
+  PRIMARY KEY (user_id, permission_key)
+);
+
+CREATE TABLE posts (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
+  deleted_at TIMESTAMP NULL,
+  deleted_by_user_id INTEGER NULL REFERENCES users(id)
+);
+
+CREATE TABLE post_media (
+  post_id INTEGER PRIMARY KEY REFERENCES posts(id) ON DELETE CASCADE,
+  media_type VARCHAR(10) NOT NULL CHECK (media_type IN ('image','gif','video')),
+  file_path TEXT NOT NULL,
+  original_filename TEXT,
+  mime_type TEXT,
+  file_size_bytes BIGINT,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE post_votes (
+  post_id INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  value SMALLINT NOT NULL CHECK (value IN (1, -1)),
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (post_id, user_id)
+);
+
+CREATE INDEX idx_post_votes_post ON post_votes(post_id);
+CREATE INDEX idx_posts_created ON posts(created_at DESC);
+
+CREATE TABLE comments (
+  id SERIAL PRIMARY KEY,
+  post_id INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  parent_comment_id INTEGER NULL REFERENCES comments(id) ON DELETE CASCADE,
+  body TEXT NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  is_deleted BOOLEAN NOT NULL DEFAULT FALSE
+);
+
+CREATE INDEX idx_comments_post ON comments(post_id, created_at);
+CREATE INDEX idx_comments_parent ON comments(parent_comment_id);
+
+
+
 INSERT INTO users (username, password);
 VALUES ('admin', '1234');
 

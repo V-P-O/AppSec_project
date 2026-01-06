@@ -26,7 +26,7 @@ def login_post():
         cur = conn.cursor()
     
         cur.execute("""
-                SELECT password_hash, is_activated, email, activation_token, id, username, role
+                SELECT password_hash, is_activated, email, activation_token, id, username, role, is_blocked
                 FROM users 
                 WHERE username = %s OR email = %s
             """, (username, username))
@@ -41,6 +41,11 @@ def login_post():
         if not user[1]:  # is_activated is FALSE
             return render_template("login.html",
                                 error="Please activate your account first.",
+                                resend_token=user[3],
+                                email=user[2])
+        if user[7]:  # is_blocked is TRUE
+            return render_template("login.html",
+                                error="You have been banned from the site.",
                                 resend_token=user[3],
                                 email=user[2])
         
