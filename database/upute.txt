@@ -1,0 +1,5 @@
+docker cp ./db.dump postgres:/tmp/db.dump
+vdocker exec -it postgres createdb -U postgres app_sec
+docker exec -t postgres pg_restore -U postgres -d app_sec --clean --if-exists /tmp/db.dump
+
+inshallah
