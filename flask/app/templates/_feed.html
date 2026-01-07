@@ -1,53 +1,109 @@
 {# templates/_feed.html #}
 
-<div class="d-flex justify-content-between align-items-center mb-2">
+<div class="d-flex justify-content-between align-items-center mb-3">
   <h4 class="m-0">Latest posts</h4>
 
   {% if session.get("user_id") %}
-    <a class="btn btn-primary btn-sm"
-       href="{{ url_for('posts.new_post_get') }}">
+    <a class="btn btn-primary btn-sm" href="{{ url_for('posts.new_post_get') }}">
       New post
     </a>
   {% endif %}
 </div>
 
-<div class="row g-3">
-  {% for p in posts %}
-    {# p: 0=id,1=title,2=created_at,3=username,4=media_type,5=file_path #}
-    <div class="col-md-6">
-      <a class="text-decoration-none text-dark"
-         href="{{ url_for('posts.view_post', post_id=p[0]) }}">
+<div class="row justify-content-center">
+  <div class="col-12 col-lg-8">
 
-        <div class="card h-100">
+    <div class="row g-3">
+      {% for p in posts %}
+        {# p: 0=id,1=title,2=created_at,3=username,4=media_type,5=file_path,6=user_id #}
+        <div class="col-12">
 
-          {% if p[5] %}
-            {% if p[4] == 'video' %}
-              <video class="card-img-top" controls preload="metadata">
-                <source src="{{ url_for('posts.media', filename=p[5]) }}">
-              </video>
-            {% else %}
-              <img class="card-img-top"
-                   src="{{ url_for('posts.media', filename=p[5]) }}"
-                   alt="post media">
+          {# card wrapper clickable, avoids nested <a> problems #}
+          <div class="card h-100 feed-card shadow-sm"
+               role="button"
+               tabindex="0"
+               data-href="{{ url_for('posts.view_post', post_id=p[0]) }}">
+
+            {% if p[5] %}
+              {% if p[4] == 'video' %}
+                <video class="card-img-top" controls preload="metadata">
+                  <source src="{{ url_for('posts.media', filename=p[5]) }}">
+                </video>
+              {% else %}
+                <img class="card-img-top"
+                     src="{{ url_for('posts.media', filename=p[5]) }}"
+                     alt="post media">
+              {% endif %}
             {% endif %}
-          {% endif %}
 
-          <div class="card-body">
-            <h5 class="card-title mb-1">{{ p[1] }}</h5>
-            <div class="text-muted small">by {{ p[3] }}</div>
+            <div class="card-body">
+              <h5 class="card-title mb-1">{{ p[1] }}</h5>
+
+              <div class="text-muted small d-flex align-items-center justify-content-between flex-wrap gap-2">
+                <div>
+                  by
+                  <a class="text-decoration-none"
+                     href="{{ url_for('users.user_profile', user_id=p[6]) }}">
+                    {{ p[3] }}
+                  </a>
+                </div>
+                <div class="text-muted small">{{ p[2] }}</div>
+              </div>
+
+              {# TAGS #}
+              {% set kws = keywords_by_post.get(p[0], []) if keywords_by_post is defined else [] %}
+              {% if kws %}
+                <div class="mt-2">
+                  {% for k in kws %}
+                    <a class="badge text-bg-secondary me-1 text-decoration-none"
+                       href="{{ url_for('posts.feed', tag=k) }}"
+                       data-feed-tag="1">
+                      {{ k }}
+                    </a>
+                  {% endfor %}
+                </div>
+              {% endif %}
+
+              {# VOTES #}
+              {% set v = vote_by_post.get(p[0], {}) if vote_by_post is defined else {} %}
+              <div class="d-flex align-items-center gap-2 mt-3">
+
+                <button type="button"
+                        class="btnVoteLike btn btn-sm d-flex align-items-center gap-1 {% if v.get('user_vote') == 1 %}btn-success{% else %}btn-outline-success{% endif %}"
+                        data-post-id="{{ p[0] }}"
+                        data-vote-url="{{ url_for('posts.vote_post', post_id=p[0]) }}">
+                  <i class="bi {% if v.get('user_vote') == 1 %}bi-hand-thumbs-up-fill{% else %}bi-hand-thumbs-up{% endif %}"></i>
+                  <span class="likesCount">{{ v.get('likes', 0) }}</span>
+                </button>
+
+                <button type="button"
+                        class="btnVoteDislike btn btn-sm d-flex align-items-center gap-1 {% if v.get('user_vote') == -1 %}btn-danger{% else %}btn-outline-danger{% endif %}"
+                        data-post-id="{{ p[0] }}"
+                        data-vote-url="{{ url_for('posts.vote_post', post_id=p[0]) }}">
+                  <i class="bi {% if v.get('user_vote') == -1 %}bi-hand-thumbs-down-fill{% else %}bi-hand-thumbs-down{% endif %}"></i>
+                  <span class="dislikesCount">{{ v.get('dislikes', 0) }}</span>
+                </button>
+
+                <span class="text-muted ms-2 small">
+                  Score: <strong class="scoreCount">{{ v.get('score', 0) }}</strong>
+                </span>
+
+              </div>
+            </div>
+
           </div>
-
         </div>
-      </a>
+      {% else %}
+        <div class="col-12">
+          <div class="alert alert-light border">
+            No posts yet.
+            {% if session.get("user_id") %}
+              <a href="{{ url_for('posts.new_post_get') }}">Create the first one</a>.
+            {% endif %}
+          </div>
+        </div>
+      {% endfor %}
     </div>
-  {% else %}
-    <div class="col-12">
-      <div class="alert alert-light border">
-        No posts yet.
-        {% if session.get("user_id") %}
-          <a href="{{ url_for('posts.new_post_get') }}">Create the first one</a>.
-        {% endif %}
-      </div>
-    </div>
-  {% endfor %}
+
+  </div>
 </div>

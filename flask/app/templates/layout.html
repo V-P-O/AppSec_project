@@ -22,12 +22,22 @@
       Board
     </a>
 
+    <form class="d-flex" method="get" action="{{ url_for('posts.feed') }}">
+      <input class="form-control me-2"
+            type="search"
+            name="q"
+            value="{{ request.args.get('q','') if request.endpoint == 'posts.feed' else '' }}"
+            placeholder="Search posts...">
+      <button class="btn btn-outline-light" type="submit">Search</button>
+    </form>
+
     <div class="d-flex">
 
       {% if session.get("user_id") %}
-        <span class="navbar-text text-white me-3">
+        <a href="{{ url_for('users.user_profile', user_id=session.get('user_id')) }}"
+          class="navbar-text text-white me-3 text-decoration-none">
           {{ session.get("username") }}
-        </span>
+        </a>
 
         <a
           href="{{ url_for('auth.logout') }}"
@@ -63,6 +73,7 @@
 <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
 <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
 <script src="https://cdn.datatables.net/1.13.8/js/dataTables.bootstrap5.min.js"></script>
+<script src="{{ url_for('static', filename='js/feed_votes.js') }}"></script>
 
 
   {% block scripts %}{% endblock %}

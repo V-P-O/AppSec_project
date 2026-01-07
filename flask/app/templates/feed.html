@@ -1,0 +1,17 @@
+{% extends "layout.html" %}
+
+{% block content %}
+  <div class="container py-3">
+    {% if q or tag %}
+      <div class="d-flex align-items-center justify-content-between mb-3">
+        <div class="text-muted small">
+          {% if q %}Search: <strong>{{ q }}</strong>{% endif %}
+          {% if tag %}{% if q %} · {% endif %}Keyword: <span class="badge text-bg-secondary">{{ tag }}</span>{% endif %}
+        </div>
+        <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('posts.feed') }}">Clear</a>
+      </div>
+    {% endif %}
+
+    {% include "_feed.html" %}
+  </div>
+{% endblock %}

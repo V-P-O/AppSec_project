@@ -17,13 +17,13 @@ def sniff_kind(head: bytes) -> str | None:
     # GIF
     if _starts_with(head, b"GIF87a") or _starts_with(head, b"GIF89a"):
         return "gif"
-    # WEBP: RIFF....WEBP
+    # WEBP
     if len(head) >= 12 and head[0:4] == b"RIFF" and head[8:12] == b"WEBP":
         return "webp"
-    # MP4: ... 'ftyp'
+    # MP4:
     if len(head) >= 12 and head[4:8] == b"ftyp":
         return "mp4"
-    # WEBM: EBML header
+    # WEBM
     if _starts_with(head, b"\x1a\x45\xdf\xa3"):
         return "webm"
     return None
@@ -45,7 +45,13 @@ def save_upload_hardened(file_storage):
     if not original:
         return None
 
-    # extension allowlist (fast pre-check, not trusted)
+    max_bytes = current_app.config.get("MAX_UPLOAD_BYTES", 25 * 1024 * 1024)  # 25MB
+    cl = getattr(file_storage, "content_length", None)
+    if cl is not None and cl > max_bytes:
+        return None
+
+
+    # extension allowlist 
     safe_name = secure_filename(original)
     if "." not in safe_name:
         return None
@@ -57,7 +63,7 @@ def save_upload_hardened(file_storage):
     if ext not in allowed:
         return None
 
-    # read header to sniff actual file type (trust this more)
+    # read header to sniff actual file type
     head = file_storage.stream.read(4096)
     file_storage.stream.seek(0)
 
@@ -81,13 +87,24 @@ def save_upload_hardened(file_storage):
     out_name = f"{base}_{rnd}.{kind}"
     abs_path = os.path.join(upload_dir, out_name)
 
-    # IMAGE HARDENING: re-encode (strips metadata, fixes content-type ambiguity)
+    # re-encode (strips metadata)
     if kind in {"png", "jpg", "webp"}:
         return _save_reencoded_image(file_storage, abs_path, kind, original)
 
-    # GIF / VIDEO: store as-is (see notes below)
-    file_storage.save(abs_path)
+    elif kind == "gif":
+        if not validate_gif_limits(file_storage):
+            return None
+        file_storage.stream.seek(0)
+        file_storage.save(abs_path)
+
+    # GIF / video, stored normally
+    else:
+        file_storage.save(abs_path)
+
     size = os.path.getsize(abs_path)
+    if size > max_bytes:
+        os.remove(abs_path)
+        return None
 
     return {
         "file_path": abs_path,
@@ -98,7 +115,7 @@ def save_upload_hardened(file_storage):
     }
 
 def _save_reencoded_image(file_storage, abs_path: str, kind: str, original: str):
-    # Prevent decompression bomb
+    # prevent decompression bomb
     Image.MAX_IMAGE_PIXELS = 20_000_000  # tune (e.g. 20MP)
 
     img = Image.open(file_storage.stream)
@@ -107,19 +124,19 @@ def _save_reencoded_image(file_storage, abs_path: str, kind: str, original: str)
 
     img = Image.open(file_storage.stream)
 
-    # Normalize orientation (EXIF) then drop metadata by re-encoding
+    # normalize orientation then drop metadata by re-encoding
     img = ImageOps.exif_transpose(img)
 
-    # Convert to a safe mode
+    # convert to a safe mode
     if img.mode not in ("RGB", "RGBA"):
         img = img.convert("RGB")
 
-    # Enforce max dimensions (optional but recommended)
+    # max dimensions
     max_side = 4000
     if max(img.size) > max_side:
         img.thumbnail((max_side, max_side))
 
-    # Save WITHOUT EXIF/metadata
+    # save without EXIF/metadata
     save_kwargs = {}
     if kind == "jpg":
         if img.mode == "RGBA":
@@ -141,3 +158,27 @@ def _save_reencoded_image(file_storage, abs_path: str, kind: str, original: str)
         "original_filename": original,
         "file_size_bytes": size,
     }
+
+def validate_gif_limits(file_storage, max_pixels=20_000_000, max_frames=300):
+    Image.MAX_IMAGE_PIXELS = max_pixels
+    file_storage.stream.seek(0)
+    img = Image.open(file_storage.stream)
+    img.verify()
+    file_storage.stream.seek(0)
+
+    img = Image.open(file_storage.stream)
+    if img.format != "GIF":
+        return False
+
+    # frame count check
+    frames = 0
+    try:
+        while True:
+            img.seek(frames)
+            frames += 1
+            if frames > max_frames:
+                return False
+    except EOFError:
+        pass
+
+    return True

@@ -4,6 +4,7 @@ from .auth.routes import auth_bp
 from .main.routes import main_bp
 from .admin.routes import admin_bp
 from .posts.routes import posts_bp
+from .users.routes import users_bp
 from app.context_processors import inject_permissions
 import os
 
@@ -15,6 +16,7 @@ def create_app():
     app.register_blueprint(main_bp)
     app.register_blueprint(admin_bp)
     app.register_blueprint(posts_bp)
+    app.register_blueprint(users_bp)
 
     app.context_processor(inject_permissions)
 

@@ -75,6 +75,21 @@ CREATE TABLE comments (
 CREATE INDEX idx_comments_post ON comments(post_id, created_at);
 CREATE INDEX idx_comments_parent ON comments(parent_comment_id);
 
+CREATE TABLE keywords (
+  id SERIAL PRIMARY KEY,
+  name TEXT NOT NULL UNIQUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE post_keywords (
+  post_id INT NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+  keyword_id INT NOT NULL REFERENCES keywords(id) ON DELETE CASCADE,
+  PRIMARY KEY (post_id, keyword_id)
+);
+
+CREATE INDEX idx_post_keywords_post_id ON post_keywords(post_id);
+CREATE INDEX idx_post_keywords_keyword_id ON post_keywords(keyword_id);
+
 
 
 INSERT INTO users (username, password);

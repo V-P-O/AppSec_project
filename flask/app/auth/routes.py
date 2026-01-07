@@ -45,9 +45,7 @@ def login_post():
                                 email=user[2])
         if user[7]:  # is_blocked is TRUE
             return render_template("login.html",
-                                error="You have been banned from the site.",
-                                resend_token=user[3],
-                                email=user[2])
+                                error="You have been banned from the site.")
         
         session.clear()
         session.modified = True

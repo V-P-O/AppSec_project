@@ -4,29 +4,11 @@ from flask import current_app, send_file
 from app.decorators import roles_required, login_required, permission_required
 from app.db import get_db_connection
 from app.uploads import save_upload_hardened
-from app.security import user_has_permission
+from app.security import user_has_permission, parse_keywords
 import os
+from app.post_helpers import get_votes, get_keywords
 
 posts_bp = Blueprint("posts", __name__)
-
-@posts_bp.route("/", methods=["GET"])
-def feed():
-    conn = get_db_connection()
-    cur = conn.cursor()
-    cur.execute("""
-        SELECT p.id, p.title, p.created_at, u.username,
-               pm.media_type, pm.file_path
-        FROM posts p
-        JOIN users u ON u.id = p.user_id
-        LEFT JOIN post_media pm ON pm.post_id = p.id
-        WHERE p.is_deleted = FALSE
-        ORDER BY p.created_at DESC
-        LIMIT 50
-    """)
-    posts = cur.fetchall()
-    cur.close()
-    conn.close()
-    return render_template("feed.html", posts=posts)
 
 @posts_bp.route("/posts/new", methods=["GET"])
 @login_required
@@ -59,7 +41,7 @@ def new_post_post():
     post_id = cur.fetchone()[0]
 
     if media_info:
-        stored_name = os.path.basename(media_info["file_path"])  # store filename only
+        stored_name = os.path.basename(media_info["file_path"])
         cur.execute("""
             INSERT INTO post_media (post_id, media_type, file_path, original_filename, mime_type, file_size_bytes)
             VALUES (%s, %s, %s, %s, %s, %s)
@@ -68,9 +50,12 @@ def new_post_post():
             media_info["media_type"],
             stored_name,
             media_info["original_filename"],
-            None,  # optional; don't trust client mimetype
+            None, 
             media_info["file_size_bytes"]
         ))
+
+    keywords = parse_keywords(request.form.get("keywords", ""))
+    add_keywords_to_post(conn, post_id, keywords)
 
     conn.commit()
     cur.close()
@@ -112,7 +97,7 @@ def view_post(post_id):
             abort(404)
 
         if viewer_id != owner_id and viewer_role != "admin":
-            if not user_has_permission(viewer_id, "delete_posts"):
+            if not user_has_permission(viewer_id, "delete_any_post"):
                 abort(404)
     
 
@@ -145,6 +130,15 @@ def view_post(post_id):
     """, (post_id,))
     comments = cur.fetchall()
 
+    cur.execute("""
+        SELECT k.name
+        FROM post_keywords pk
+        JOIN keywords k ON k.id = pk.keyword_id
+        WHERE pk.post_id = %s
+        ORDER BY k.name;
+    """, (post_id, ))
+    keywords = cur.fetchall()
+
     cur.close()
     conn.close()
 
@@ -153,7 +147,8 @@ def view_post(post_id):
         post=post,
         score=score, likes=likes, dislikes=dislikes,
         user_vote=user_vote,
-        comments=comments
+        comments=comments,
+        keywords=keywords
     )
 
 
@@ -280,7 +275,7 @@ def delete_post(post_id):
     can_delete = (
         viewer_id == owner_id
         or viewer_role == "admin"
-        or user_has_permission(viewer_id, "delete_posts")
+        or user_has_permission(viewer_id, "delete_any_post")
     )
     if not can_delete:
         cur.close(); conn.close()
@@ -320,11 +315,11 @@ def recover_post(post_id):
     viewer_id = session["user_id"]
     viewer_role = session.get("role")
 
-    can_delete = (
+    can_recover = (
         viewer_role == "admin"
-        or user_has_permission(viewer_id, "delete_posts")
+        or user_has_permission(viewer_id, "delete_any_post")
     )
-    if not can_delete:
+    if not can_recover:
         cur.close(); conn.close()
         abort(403)
 
@@ -341,3 +336,69 @@ def recover_post(post_id):
     conn.close()
 
     return redirect(url_for("posts.view_post", post_id=post_id))
+
+def add_keywords_to_post(conn, post_id: int, keywords: list[str]):
+    if not keywords:
+        return
+
+    with conn.cursor() as cur:
+        cur.executemany(
+            "INSERT INTO keywords(name) VALUES (%s) ON CONFLICT (name) DO NOTHING",
+            [(k,) for k in keywords],
+        )
+
+        cur.execute("SELECT id, name FROM keywords WHERE name = ANY(%s)", (keywords,))
+        rows = cur.fetchall()  # [(id, name), ...]
+
+        cur.executemany(
+            "INSERT INTO post_keywords(post_id, keyword_id) VALUES (%s, %s) ON CONFLICT DO NOTHING",
+            [(post_id, kid) for (kid, _name) in rows],
+        )
+
+@posts_bp.get("/feed")
+def feed():
+    q = (request.args.get("q") or "").strip()
+    tag = (request.args.get("tag") or "").strip().lower()
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT DISTINCT
+            p.id, p.title, p.created_at, u.username,
+            pm.media_type, pm.file_path, p.user_id
+        FROM posts p
+        JOIN users u ON u.id = p.user_id
+        LEFT JOIN post_media pm ON pm.post_id = p.id
+        LEFT JOIN post_keywords pk ON pk.post_id = p.id
+        LEFT JOIN keywords k ON k.id = pk.keyword_id
+        WHERE
+            p.is_deleted = FALSE
+            AND (%s = '' OR k.name = %s)
+            AND (
+                %s = ''
+                OR p.title ILIKE concat('%%', %s, '%%')
+                OR k.name ILIKE concat('%%', %s, '%%')
+            )
+        ORDER BY p.created_at DESC
+        LIMIT 50
+    """, (tag, tag, q, q, q))
+
+    posts = cur.fetchall()
+
+    post_ids = [p[0] for p in posts]
+    keywords_by_post = get_keywords(post_ids)
+    
+    vote_by_post = get_votes(post_ids)
+
+    cur.close()
+    conn.close()
+
+    return render_template(
+        "feed.html",
+        posts=posts,
+        keywords_by_post=keywords_by_post,
+        vote_by_post=vote_by_post,
+        q=q,
+        tag=tag
+    )

@@ -4,12 +4,29 @@
 {% block content %}
 {# post indices: 0=id,1=title,2=created_at,3=username,4=user_id,5=media_type,6=file_path #}
 
+{% if keywords %}
+  <div class="mt-2">
+    {% for k in keywords %}
+      <span class="badge text-bg-secondary me-1">{{ k[0] }}</span>
+    {% endfor %}
+  </div>
+{% endif %}
+
+
 {% set can_delete =
   session.get("user_id") and (
     session.get("user_id") == post[4]
     or session.get("role") == "admin"
     or ("*" in user_permissions)
-    or ("delete_posts" in user_permissions)
+    or ("delete_any_post" in user_permissions)
+  )
+%}
+
+{% set can_recover =
+  session.get("user_id") and (
+    session.get("role") == "admin"
+    or ("*" in user_permissions)
+    or ("delete_any_post" in user_permissions)
   )
 %}
 
@@ -20,7 +37,7 @@
       <strong>This post was deleted</strong>
       {% if post[9] %} by <strong>{{ post[9] }}</strong>{% endif %}.
     </div>
-      {% if can_delete %}
+      {% if can_recover %}
         <form method="post"
                 action="{{ url_for('posts.recover_post', post_id=post[0]) }}"
                 class="mb-3"
@@ -66,20 +83,35 @@
 
     <span class="text-muted ms-2">Score: <strong id="scoreCount">{{ score }}</strong></span>
     </div>
-  <div class="text-muted">by {{ post[3] }}</div>
+    <div class="text-muted">
+      by
+      <a class="text-decoration-none"
+        href="{{ url_for('users.user_profile', user_id=post[4]) }}">
+        {{ post[3] }}
+      </a>
+    </div>
 </div>
 
 {% if post[6] %}
   <div class="card mb-4">
-    {% if post[5] == 'video' %}
-      <video class="w-100" controls preload="metadata">
-        <source src="{{ url_for('posts.media', filename=post[6]) }}">
-      </video>
-    {% else %}
-      <img class="w-100" src="{{ url_for('posts.media', filename=post[6]) }}" alt="post media">
-    {% endif %}
+    <div class="p-2 d-flex justify-content-center">
+      {% if post[5] == 'video' %}
+        <video class="img-fluid rounded"
+               style="max-height: 70vh;"
+               controls
+               preload="metadata">
+          <source src="{{ url_for('posts.media', filename=post[6]) }}">
+        </video>
+      {% else %}
+        <img class="img-fluid rounded"
+             style="max-height: 70vh; object-fit: contain;"
+             src="{{ url_for('posts.media', filename=post[6]) }}"
+             alt="post media">
+      {% endif %}
+    </div>
   </div>
 {% endif %}
+
 
 <hr class="my-4">
 

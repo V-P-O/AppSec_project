@@ -1,7 +1,8 @@
 from flask import Blueprint
 from flask import render_template, request, redirect, url_for, session, abort, jsonify
-from app.decorators import roles_required
+from app.decorators import roles_required, permission_required
 from app.db import get_db_connection
+from app.security import is_safe_redirect
 
 admin_bp = Blueprint("admin", __name__)
 
@@ -37,7 +38,7 @@ def dashboard():
     return render_template("admin_dashboard.html", users=users)
 
 @admin_bp.route("/admin/users/<int:user_id>/toggle", methods=["POST"])
-@roles_required("admin")
+@permission_required("ban_user")
 def toggle_user_status(user_id):
     if user_id == session.get("user_id"):
         abort(400)
@@ -83,6 +84,10 @@ def toggle_user_status(user_id):
     conn.commit()
     cur.close()
     conn.close()
+
+    next_url = request.form.get("next") or request.args.get("next")
+    if is_safe_redirect(next_url):
+        return redirect(next_url)
 
     return redirect(url_for("admin.dashboard"))
 
