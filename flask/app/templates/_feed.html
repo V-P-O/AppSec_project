@@ -88,6 +88,14 @@
                   Score: <strong class="scoreCount">{{ v.get('score', 0) }}</strong>
                 </span>
 
+                {% set is_deleted = (p|length > 7 and p[7] is not none and p[7]) %}
+                {% if is_deleted %}
+                  <div class="alert alert-warning py-1 px-2 mb-2 small">
+                    <i class="bi bi-exclamation-triangle-fill me-1"></i>
+                    This post was deleted.
+                  </div>
+                {% endif %}
+
               </div>
             </div>
 

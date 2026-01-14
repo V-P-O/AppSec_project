@@ -33,7 +33,7 @@ def user_profile(user_id: int):
 
     cur.execute("""
         SELECT p.id, p.title, p.created_at, u.username,
-                pm.media_type, pm.file_path, p.user_id
+                pm.media_type, pm.file_path, p.user_id, p.is_deleted
         FROM posts p
         JOIN users u ON u.id = p.user_id
         LEFT JOIN post_media pm ON pm.post_id = p.id
