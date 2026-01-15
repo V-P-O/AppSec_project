@@ -118,7 +118,9 @@ def view_post(post_id):
             WHERE post_id = %s AND user_id = %s
         """, (post_id, session["user_id"]))
         row = cur.fetchone()
-    user_vote = row[0] if row else 0
+        user_vote = row[0] if row else 0
+    else:
+        user_vote = 0
 
     cur.execute("""
         SELECT c.id, c.parent_comment_id, c.body, c.created_at,
