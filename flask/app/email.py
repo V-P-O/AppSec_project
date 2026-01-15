@@ -20,10 +20,6 @@ def send_token(email):
     msg["To"] = email
 
     with smtplib.SMTP_SSL(MAIL_HOST, MAIL_PORT) as smtp:
-        smtp.ehlo()
-        smtp.starttls()
-        smtp.ehlo()
-
         smtp.login(
             send_email,
             send_password,
@@ -47,9 +43,5 @@ def send_reset_email(email, token):
     msg["To"] = email
 
     with smtplib.SMTP_SSL(MAIL_HOST, MAIL_PORT) as smtp:
-        smtp.ehlo()
-        smtp.starttls()
-        smtp.ehlo()
-
         smtp.login(send_email, send_password)
         smtp.send_message(msg)
