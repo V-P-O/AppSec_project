@@ -1,0 +1,8 @@
+.venv
+venv
+__pycache__
+.mypy_cache
+.git
+uploads
+database
+docs
